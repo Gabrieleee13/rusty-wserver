@@ -24,13 +24,8 @@ impl Server {
         return Ok(Server{ socket: socket.unwrap(), pool: ThreadPool::new(pool_size) });
     }
 
-    pub fn listen(self: Arc<Self>) {
-        let listener = self.socket.bind();
-
-        let listener = listener.unwrap_or_else(|error| {
-            println!("Error... {}", error);
-            process::exit(1);
-        });
+    pub fn listen(self: Arc<Self>) -> Result<(), std::io::Error>{
+        let listener = self.socket.bind()?;
 
         for stream in listener.incoming() {
             if let Ok(stream) = stream {
@@ -40,6 +35,8 @@ impl Server {
                 });
             }
         } 
+
+        return Ok(())
     }
 
     fn handle_stream(&self,  mut stream: TcpStream) -> () {

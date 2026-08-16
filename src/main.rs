@@ -1,5 +1,6 @@
 mod core;
 use core::Server;
+use std::eprint;
 use std::{io::stdin, println, process, thread};
 use std::sync::Arc;
 
@@ -12,16 +13,13 @@ fn main() {
         IP_ADDRESS.to_string(),
         PORT_NUMBER,
         POOL_SIZE
-    );
+    ).expect("failed while initializing the server");
 
-    if let Err(err) = server {
-        println!("Error... {}", err);
-        process::exit(1);
-    }
-
-    let server = Arc::new(server.unwrap());
+    let server = Arc::new(server);
     thread::spawn(move|| {
-        server.listen();
+        if let Err(error) = server.listen() {
+            eprint!("Critical error... {}", error)
+        }
     });
 
     let mut buffer: String = String::new();
