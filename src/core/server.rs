@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Write}, net::TcpStream, println, process, sync::Arc};
+use std::{io::{BufRead, BufReader, Write}, net::TcpStream, sync::{Arc, mpsc}};
 
 use threadpool::ThreadPool;
 use crate::{core::socket::Socket};
@@ -30,16 +30,23 @@ impl Server {
         for stream in listener.incoming() {
             if let Ok(stream) = stream {
                 let server = Arc::clone(&self);
+
+                let (sender, reciver) = mpsc::channel();
+
                 self.pool.execute(move|| {
-                    server.handle_stream(stream);
+                    let result_stream = server.handle_stream(stream);
+                    let _ = sender.send(result_stream);
                 });
+
+                let result_esito = reciver.recv().unwrap();
+                result_esito?
             }
         } 
 
         return Ok(())
     }
 
-    fn handle_stream(&self,  mut stream: TcpStream) -> () {
+    fn handle_stream(&self,  mut stream: TcpStream) -> Result<(), std::io::Error> {
         let _request: Vec<String> = BufReader::new(&stream)
         .lines()
         .map(|r| r.unwrap())
@@ -47,10 +54,8 @@ impl Server {
         .collect();
 
         let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
-        let send_result = stream.write_all(response.as_bytes());
+        stream.write_all(response.as_bytes())?;
 
-        if let Err(error) = send_result {
-            println!("Error... {}", error);
-        }
+        Ok(())
     }
 }
