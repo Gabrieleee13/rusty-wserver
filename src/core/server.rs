@@ -11,17 +11,13 @@ pub struct Server {
 impl Server {
 
     pub fn new(ip: String, port: usize, pool_size: usize) -> Result<Server, String> {
-        let socket = Socket::new(ip, port);
-
-        if let Err(error) = socket {
-            return Err(error);
-        }
+        let socket = Socket::new(ip, port)?;
 
         if pool_size < 1 {
             return Err("invalid pool size".to_string());
         }
 
-        return Ok(Server{ socket: socket.unwrap(), pool: ThreadPool::new(pool_size) });
+        return Ok(Server{ socket: socket, pool: ThreadPool::new(pool_size) });
     }
 
     pub fn listen(self: Arc<Self>) -> Result<(), std::io::Error>{
@@ -34,12 +30,12 @@ impl Server {
                 let (sender, reciver) = mpsc::channel();
 
                 self.pool.execute(move|| {
-                    let result_stream = server.handle_stream(stream);
-                    let _ = sender.send(result_stream);
+                    let stream_result = server.handle_stream(stream);
+                    let _ = sender.send(stream_result);
                 });
 
-                let result_esito = reciver.recv().unwrap();
-                result_esito?
+                let stream_result = reciver.recv().unwrap();
+                stream_result?
             }
         } 
 
