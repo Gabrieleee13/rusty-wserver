@@ -1,4 +1,5 @@
 use std::{io::{BufRead, BufReader, Write}, net::TcpStream, sync::{Arc, mpsc}};
+use crate::http::httphandler::HttpHandler;
 
 use threadpool::ThreadPool;
 use crate::{core::socket::Socket};
@@ -20,10 +21,14 @@ impl Server {
         return Ok(Server{ socket: socket, pool: ThreadPool::new(pool_size) });
     }
 
-    pub fn listen(self: Arc<Self>) -> Result<(), std::io::Error>{
-        let listener = self.socket.bind()?;
+    pub fn listen(self: Arc<Self>) -> Result<(), String>{
+        let listener = self.socket.bind();
 
-        for stream in listener.incoming() {
+        if let Err(e) = listener {
+            return Err(e.to_string());
+        }
+
+        for stream in listener.unwrap().incoming() {
             if let Ok(stream) = stream {
                 let server = Arc::clone(&self);
 
@@ -34,23 +39,16 @@ impl Server {
                     let _ = sender.send(stream_result);
                 });
 
-                let stream_result = reciver.recv().unwrap();
-                stream_result?
+                reciver.recv().unwrap()?;
             }
         } 
 
         return Ok(())
     }
 
-    fn handle_stream(&self,  mut stream: TcpStream) -> Result<(), std::io::Error> {
-        let _request: Vec<String> = BufReader::new(&stream)
-        .lines()
-        .map(|r| r.unwrap())
-        .take_while(|s| !s.is_empty())
-        .collect();
-
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
-        stream.write_all(response.as_bytes())?;
+    fn handle_stream(&self, stream: TcpStream) -> Result<(), String> {
+        let handler = HttpHandler::new(stream);
+        let _ = handler.handle_stream()?;
 
         Ok(())
     }
