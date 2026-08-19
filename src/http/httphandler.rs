@@ -1,25 +1,27 @@
 use std::{io::{BufRead, BufReader}, net::TcpStream, println};
 use std::cell::RefCell;
 
+use crate::http::request::Request;
+
 pub struct HttpHandler {
     stream: TcpStream,
-    raw_request: RefCell<Option<Vec<String>>>
+    raw_request: RefCell<Option<Vec<String>>>,
+    request: RefCell<Option<Request>>
 }
 
 impl HttpHandler {
 
     pub fn new(stream: TcpStream) -> HttpHandler {
-        return HttpHandler { stream: stream, raw_request: RefCell::new(None) }
+        return HttpHandler {
+            stream: stream,
+            raw_request: RefCell::new(None),
+            request: RefCell::new(None)
+        }
     }
 
     pub fn handle_stream(&self) -> Result<(), String> {
+
         *self.raw_request.borrow_mut() = self.get_raw_request();
-
-        if let None = *self.raw_request.borrow() {
-            return Err("error while reading the request".to_string());
-        }
-
-        println!("{:#?}", *self.raw_request.borrow());
 
         Ok(())
     }
