@@ -1,4 +1,4 @@
-use std::{net::{IpAddr, TcpListener}, todo};
+use std::{net::{IpAddr, TcpListener}};
 
 // Constant for check if the port isn't a well known port
 const MAX_WELL_KNOWN_PORTS: usize = 1023;

@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Write}, net::TcpStream, sync::{Arc, mpsc}};
+use std::{io::{BufRead, BufReader, Write}, net::TcpStream, println, sync::{Arc, mpsc}};
 use crate::http::httphandler::HttpHandler;
 
 use threadpool::ThreadPool;
@@ -22,24 +22,19 @@ impl Server {
     }
 
     pub fn listen(self: Arc<Self>) -> Result<(), String>{
-        let listener = self.socket.bind();
+        let listener = self.socket.bind().map_err(|e| e.to_string())?;
 
-        if let Err(e) = listener {
-            return Err(e.to_string());
-        }
-
-        for stream in listener.unwrap().incoming() {
+        for stream in listener.incoming() {
             if let Ok(stream) = stream {
                 let server = Arc::clone(&self);
 
-                let (sender, reciver) = mpsc::channel();
-
                 self.pool.execute(move|| {
                     let stream_result = server.handle_stream(stream);
-                    let _ = sender.send(stream_result);
-                });
 
-                reciver.recv().unwrap()?;
+                    if let Err(str) = stream_result {
+                        println!("Error while manage the client... {}", str)  
+                    }
+                });
             }
         } 
 

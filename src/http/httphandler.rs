@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader}, net::TcpStream, println};
+use std::{io::{BufRead, BufReader}, net::TcpStream};
 use std::cell::RefCell;
 
 use crate::http::request::Request;
@@ -22,6 +22,11 @@ impl HttpHandler {
     pub fn handle_stream(&self) -> Result<(), String> {
 
         *self.raw_request.borrow_mut() = self.get_raw_request();
+
+        let mut raw_request_refmut = self.raw_request.borrow_mut();
+        let raw_request = raw_request_refmut.get_or_insert_with(Vec::new);
+
+        let _request_result = Request::build_from_raw(raw_request);
 
         Ok(())
     }

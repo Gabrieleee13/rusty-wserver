@@ -1,8 +1,9 @@
 use core::{fmt};
-use std::{collections::{HashMap}, str::FromStr, todo, write};
+use std::{collections::HashMap, str::FromStr, write};
 
 const HTTP_WHITE_LINE: &str = "\r\n\r\n";
 
+#[derive(Debug)]
 pub enum HttpMethod {
     Get,
     Post,
@@ -34,20 +35,14 @@ impl FromStr for HttpMethod {
         }
     }
 }
+
+#[derive(Debug)]
 pub enum HttpVersion {
     Http09, // HTTP/0.9
     Http10, // HTTP/1.0
     Http11, // HTTP/1.1
     Http2,  // HTTP/2.0
     Http3,  // HTTP/3.0
-}
-
-pub struct ParseVersionError;
-
-impl fmt::Display for ParseVersionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Versione HTTP non valida o non supportata")
-    }
 }
 
 impl fmt::Display for HttpVersion {
@@ -77,6 +72,51 @@ impl FromStr for HttpVersion {
         }
     }
 }
+#[derive(Debug, Clone, Copy)]
+#[repr(u16)]
+pub enum HttpStatus {
+    Ok = 200,
+    Created = 201,
+    BadRequest = 400,
+    Unauthorized = 401,
+    NotFound = 404,
+    InternalServerError = 500,
+}
+
+impl HttpStatus {
+    pub fn as_u16(&self) -> u16 {
+        *self as u16
+    }
+
+    pub fn canonical_reason(&self) -> &'static str {
+        match self {
+            HttpStatus::Ok => "OK",
+            HttpStatus::Created => "Created",
+            HttpStatus::BadRequest => "Bad Request",
+            HttpStatus::Unauthorized => "Unauthorized",
+            HttpStatus::NotFound => "Not Found",
+            HttpStatus::InternalServerError => "Internal Server Error",
+        }
+    }
+}
+
+impl TryFrom<u16> for HttpStatus {
+    type Error = ();
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            200 => Ok(HttpStatus::Ok),
+            201 => Ok(HttpStatus::Created),
+            400 => Ok(HttpStatus::BadRequest),
+            401 => Ok(HttpStatus::Unauthorized),
+            404 => Ok(HttpStatus::NotFound),
+            500 => Ok(HttpStatus::InternalServerError),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Request {
     method: HttpMethod,
     uri: String,
@@ -85,28 +125,30 @@ pub struct Request {
     body: Option<String>
 }
 
+impl Default for Request {
+
+   fn default() -> Self {
+        return Request {
+            method: HttpMethod::Get,
+            uri: String::from("/"),
+            version: HttpVersion::Http11,
+            headers: HashMap::new(),
+            body: None
+        }        
+    } 
+
+}
+
 impl Request {
 
-    pub fn build_from_raw(mut raw_lines: Vec<String>) -> Result<Request, String> {
-        let (method, uri, version) = Request::get_request_line_args( &mut raw_lines)?;
+    pub fn build_from_raw(mut raw_lines: &mut Vec<String>) -> Result<Request, HttpStatus> {
+        
+        let (method, uri, version) = Request::get_request_line_args(&mut raw_lines)?;
         let headers = Request::get_headers(&mut raw_lines)?;
-        let body = Request::get_body( &mut raw_lines)?;
+        let body = Request::get_body(&mut raw_lines);
 
-        let enum_method = method.parse::<HttpMethod>();
-
-        if let Err(()) = enum_method {
-            return Err("Not a valid http method".to_string());
-        }
-
-        let enum_version = version.parse::<HttpVersion>();
-
-        if let Err(()) = enum_version {
-            return Err("Not a valid http version".to_string());
-        }
-
-        let method = enum_method.unwrap();
-        let version = enum_version.unwrap();
-
+        let method = method.parse::<HttpMethod>().map_err(|_err| HttpStatus::BadRequest)?;
+        let version = version.parse::<HttpVersion>().map_err(|_err| HttpStatus::BadRequest)?;
 
         return Ok (Request {
             method: method,
@@ -118,19 +160,19 @@ impl Request {
 
     }
 
-    fn get_request_line_args(raw_request: &mut Vec<String>) -> Result<(String, String, String), String> {
+    fn get_request_line_args(raw_request: &mut Vec<String>) -> Result<(String, String, String), HttpStatus> {
        
         let first_line = raw_request.remove(0);
         let mut parts = first_line.split_whitespace();
 
-        let method = parts.next().ok_or("error while reading the request method")?;
-        let uri = parts.next().ok_or("error while reading the uri")?;
-        let version = parts.next().ok_or("error while reading the version")?;
+        let method = parts.next().ok_or(HttpStatus::BadRequest)?;
+        let uri = parts.next().ok_or(HttpStatus::BadRequest)?;
+        let version = parts.next().ok_or(HttpStatus::BadRequest)?;
 
         Ok((method.to_string(), uri.to_string(), version.to_string()))
     }
 
-    fn get_headers(raw_request: &mut Vec<String>) -> Result<HashMap<String, String>, String> {
+    fn get_headers(raw_request: &mut Vec<String>) -> Result<HashMap<String, String>, HttpStatus> {
         let mut headers = HashMap::new();
 
         let split_pos = raw_request
@@ -149,15 +191,21 @@ impl Request {
             if let Some((key, value)) = line.split_once(": ") {
                 headers.insert(key.trim().to_string(), value.trim().to_string());
             } else {
-                return Err(format!("Riga header non valida: '{line}'"));
+                return Err(HttpStatus::BadRequest);
             }
         }
 
         Ok(headers)
     }
 
-    fn get_body(raw_lines: &mut Vec<String>) -> Result<Option<String>, String> {
-        todo!()
+    fn get_body(raw_lines: &mut Vec<String>) -> Option<String> {
+        if raw_lines.is_empty() {
+            return None;
+        }
+
+        let body = raw_lines.drain(..).collect::<Vec<String>>().join("\r\n");
+
+        Some(body)
     }
 
 }
