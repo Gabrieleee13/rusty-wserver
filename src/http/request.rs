@@ -142,13 +142,21 @@ impl Default for Request {
 impl Request {
 
     pub fn build_from_raw(mut raw_lines: &mut Vec<String>) -> Result<Request, HttpStatus> {
+
+        if raw_lines.is_empty() {
+            return Err(HttpStatus::BadRequest)
+        }
         
         let (method, uri, version) = Request::get_request_line_args(&mut raw_lines)?;
         let headers = Request::get_headers(&mut raw_lines)?;
-        let body = Request::get_body(&mut raw_lines);
 
         let method = method.parse::<HttpMethod>().map_err(|_err| HttpStatus::BadRequest)?;
         let version = version.parse::<HttpVersion>().map_err(|_err| HttpStatus::BadRequest)?;
+
+        let body = Request::get_body(&mut raw_lines);
+        if headers.contains_key("Content-Type") && body.is_none() {
+            return Err(HttpStatus::BadRequest);
+        }
 
         return Ok (Request {
             method: method,
