@@ -1,5 +1,5 @@
 use core::{fmt};
-use std::{collections::HashMap, str::FromStr, write};
+use std::{str::FromStr, write};
 
 const HTTP_WHITE_LINE: &str = "\r\n\r\n";
 
@@ -117,11 +117,106 @@ impl TryFrom<u16> for HttpStatus {
 }
 
 #[derive(Debug)]
+pub enum HttpHeaderName {
+    Accept,
+    AcceptEncoding,
+    AcceptLanguage,
+    Authorization,
+    Host,
+    UserAgent,
+
+    CacheControl,
+    ContentLength,
+    ContentType,
+    ETag,
+    Location,
+    Server,
+    SetCookie,
+
+    AccessControlAllowOrigin,
+    AccessControlAllowMethods,
+    AccessControlAllowHeaders,
+
+    Custom(String),
+}
+
+impl fmt::Display for HttpHeaderName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Accept => "Accept",
+            Self::AcceptEncoding => "Accept-Encoding",
+            Self::AcceptLanguage => "Accept-Language",
+            Self::Authorization => "Authorization",
+            Self::Host => "Host",
+            Self::UserAgent => "User-Agent",
+            Self::CacheControl => "Cache-Control",
+            Self::ContentLength => "Content-Length",
+            Self::ContentType => "Content-Type",
+            Self::ETag => "ETag",
+            Self::Location => "Location",
+            Self::Server => "Server",
+            Self::SetCookie => "Set-Cookie",
+            Self::AccessControlAllowOrigin => "Access-Control-Allow-Origin",
+            Self::AccessControlAllowMethods => "Access-Control-Allow-Methods",
+            Self::AccessControlAllowHeaders => "Access-Control-Allow-Headers",
+            Self::Custom(custom) => custom.as_str(),
+        };
+        write!(f, "{}", name)
+    }
+}
+
+impl FromStr for HttpHeaderName {
+    type Err = std::convert::Infallible; 
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.to_ascii_lowercase();
+
+        let header = match lower.as_str() {
+            "accept" => Self::Accept,
+            "accept-encoding" => Self::AcceptEncoding,
+            "accept-language" => Self::AcceptLanguage,
+            "authorization" => Self::Authorization,
+            "host" => Self::Host,
+            "user-agent" => Self::UserAgent,
+            "cache-control" => Self::CacheControl,
+            "content-length" => Self::ContentLength,
+            "content-type" => Self::ContentType,
+            "etag" => Self::ETag,
+            "location" => Self::Location,
+            "server" => Self::Server,
+            "set-cookie" => Self::SetCookie,
+            "access-control-allow-origin" => Self::AccessControlAllowOrigin,
+            "access-control-allow-methods" => Self::AccessControlAllowMethods,
+            "access-control-allow-headers" => Self::AccessControlAllowHeaders,
+            _ => Self::Custom(s.to_string()),
+        };
+        Ok(header)
+    }
+}
+
+#[derive(Debug)]
+pub struct Header {
+    name: HttpHeaderName,
+    value: String
+}
+
+impl Header {
+    pub fn new(name: HttpHeaderName, value: String) -> Header {
+
+        Header {
+            name: name,
+            value: value            
+        }
+
+    }
+}
+
+#[derive(Debug)]
 pub struct Request {
     method: HttpMethod,
     uri: String,
     version: HttpVersion,
-    headers: HashMap<String, String>,
+    headers: Vec<Header>,
     body: Option<String>
 }
 
@@ -132,7 +227,7 @@ impl Default for Request {
             method: HttpMethod::Get,
             uri: String::from("/"),
             version: HttpVersion::Http11,
-            headers: HashMap::new(),
+            headers: Vec::new(),
             body: None
         }        
     } 
@@ -154,8 +249,9 @@ impl Request {
         let version = version.parse::<HttpVersion>().map_err(|_err| HttpStatus::BadRequest)?;
 
         let body = Request::get_body(&mut raw_lines);
-        if headers.contains_key("Content-Type") && body.is_none() {
-            return Err(HttpStatus::BadRequest);
+
+        if Request::check_if_body_is_needed(&headers) && body.is_none() {
+            return Err(HttpStatus::BadRequest)
         }
 
         return Ok (Request {
@@ -180,8 +276,8 @@ impl Request {
         Ok((method.to_string(), uri.to_string(), version.to_string()))
     }
 
-    fn get_headers(raw_request: &mut Vec<String>) -> Result<HashMap<String, String>, HttpStatus> {
-        let mut headers = HashMap::new();
+    fn get_headers(raw_request: &mut Vec<String>) -> Result<Vec<Header>, HttpStatus> {
+        let mut headers: Vec<Header> = Vec::new();
 
         let split_pos = raw_request
             .iter()
@@ -197,7 +293,7 @@ impl Request {
 
         for line in header_lines {
             if let Some((key, value)) = line.split_once(": ") {
-                headers.insert(key.trim().to_string(), value.trim().to_string());
+                headers.push(Header::new(HttpHeaderName::from_str(key).unwrap(), value.to_string()));
             } else {
                 return Err(HttpStatus::BadRequest);
             }
@@ -214,6 +310,18 @@ impl Request {
         let body = raw_lines.drain(..).collect::<Vec<String>>().join("\r\n");
 
         Some(body)
+    }
+
+    fn check_if_body_is_needed(headers: &Vec<Header>) -> bool {
+
+        for header in headers {
+            match header.name {
+                HttpHeaderName::ContentType  => return true,
+                _ => continue
+            }
+        }
+
+        return false;
     }
 
 }
