@@ -250,8 +250,15 @@ impl Request {
 
         let body = Request::get_body(&mut raw_lines);
 
-        if Request::check_if_body_is_needed(&headers) && body.is_none() {
-            return Err(HttpStatus::BadRequest)
+        if Request::check_if_body_is_needed(&headers) {
+
+            if body.is_none() {
+                return Err(HttpStatus::BadRequest)
+            }
+
+            let content_type_header_option = headers.iter().find(|h| matches!(h.name, HttpHeaderName::ContentType));
+            let content_type = content_type_header_option.unwrap();  
+           
         }
 
         return Ok (Request {
@@ -314,11 +321,8 @@ impl Request {
 
     fn check_if_body_is_needed(headers: &Vec<Header>) -> bool {
 
-        for header in headers {
-            match header.name {
-                HttpHeaderName::ContentType  => return true,
-                _ => continue
-            }
+        if let Some(_h) = headers.iter().find(|h| matches!(h.name, HttpHeaderName::ContentType)) {
+            return true;
         }
 
         return false;
