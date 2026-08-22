@@ -1,9 +1,17 @@
 use core::{fmt};
 use std::{str::FromStr, write};
+use lasso::ThreadedRodeo;
+use std::sync::Arc;
+use lasso::Spur;
+use once_cell::sync::Lazy;
 
 const HTTP_WHITE_LINE: &str = "\r\n\r\n";
 
-#[derive(Debug)]
+pub static HEADER_INTERNER: Lazy<Arc<ThreadedRodeo>> = Lazy::new(|| {
+    Arc::new(ThreadedRodeo::default())
+});
+
+#[derive(Debug, Clone, Copy)]
 pub enum HttpMethod {
     Get,
     Post,
@@ -36,7 +44,7 @@ impl FromStr for HttpMethod {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum HttpVersion {
     Http09, // HTTP/0.9
     Http10, // HTTP/1.0
@@ -159,7 +167,7 @@ impl fmt::Display for HttpHeaderName {
             Self::AccessControlAllowOrigin => "Access-Control-Allow-Origin",
             Self::AccessControlAllowMethods => "Access-Control-Allow-Methods",
             Self::AccessControlAllowHeaders => "Access-Control-Allow-Headers",
-            Self::Custom(custom) => custom.as_str(),
+            Self::Custom(custom) => custom
         };
         write!(f, "{}", name)
     }
@@ -188,7 +196,7 @@ impl FromStr for HttpHeaderName {
             "access-control-allow-origin" => Self::AccessControlAllowOrigin,
             "access-control-allow-methods" => Self::AccessControlAllowMethods,
             "access-control-allow-headers" => Self::AccessControlAllowHeaders,
-            _ => Self::Custom(s.to_string()),
+            _ => Self::Custom(lower.to_string())
         };
         Ok(header)
     }
@@ -207,6 +215,20 @@ impl Header {
             name: name,
             value: value            
         }
+
+    }
+}
+
+pub struct RequestValidator { request: Request }
+
+impl RequestValidator {
+    pub fn new(request: Request) -> RequestValidator {
+        RequestValidator {
+            request: request
+        }
+    }
+
+    pub fn validate(&self) {
 
     }
 }
@@ -249,17 +271,6 @@ impl Request {
         let version = version.parse::<HttpVersion>().map_err(|_err| HttpStatus::BadRequest)?;
 
         let body = Request::get_body(&mut raw_lines);
-
-        if Request::check_if_body_is_needed(&headers) {
-
-            if body.is_none() {
-                return Err(HttpStatus::BadRequest)
-            }
-
-            let content_type_header_option = headers.iter().find(|h| matches!(h.name, HttpHeaderName::ContentType));
-            let content_type = content_type_header_option.unwrap();  
-           
-        }
 
         return Ok (Request {
             method: method,
@@ -318,14 +329,4 @@ impl Request {
 
         Some(body)
     }
-
-    fn check_if_body_is_needed(headers: &Vec<Header>) -> bool {
-
-        if let Some(_h) = headers.iter().find(|h| matches!(h.name, HttpHeaderName::ContentType)) {
-            return true;
-        }
-
-        return false;
-    }
-
 }
