@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Write}, net::TcpStream, println, sync::{Arc, mpsc}};
+use std::{net::TcpStream, println, sync::Arc};
 use crate::http::httphandler::HttpHandler;
 
 use threadpool::ThreadPool;
@@ -21,7 +21,12 @@ impl Server {
         return Ok(Server{ socket: socket, pool: ThreadPool::new(pool_size) });
     }
 
-    pub fn listen(self: Arc<Self>) -> Result<(), String>{
+    /**
+     *  Since the self variable (Server) cannot use outsite of the scope's method
+     *  We wrap self into an Arc<T> so by doing that we can clone with thread-safety self for obtain
+     *  A clone of Server wich will be use for call the .handle_stream() method in the scope's thread
+     */
+    pub fn listen(self: Arc<Self>) -> Result<(), String> {
         let listener = self.socket.bind().map_err(|e| e.to_string())?;
 
         for stream in listener.incoming() {
